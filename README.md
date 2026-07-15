@@ -1,3 +1,4 @@
+
 # Legacylens Infrastructure as Code (IaC) - Day 1
 
 Today, I transitioned the core network architecture for the Legacylens project from a manual AWS Web Console deployment into a repeatable, automated Infrastructure as Code (IaC) configuration using Terraform. This foundation establishes a secure, multi-tier cloud environment optimized for scalable container and database components, deployed directly within the `ap-south-1` (Mumbai) region.
@@ -5,3 +6,6 @@ Today, I transitioned the core network architecture for the Legacylens project f
 The core infrastructure centers around a custom Virtual Private Cloud named `Legacylens-VPC` with a `10.0.0.0/16` CIDR block. To guarantee strict boundary isolation, the space is segmented into three distinct subnets: a public tier (`10.0.1.0/24`) providing inbound/outbound edge routing, a private application tier (`10.0.2.0/24`) allocated for container hosting in availability zone `ap-south-1a`, and a completely isolated private database tier (`10.0.3.0/24`) mapped to `ap-south-1b`. External internet connectivity is mediated through a dedicated Internet Gateway linked via a public route table associated exclusively with the public subnet.
 
 To validate routing compliance, I provisioned an external-facing `t3.micro` EC2 Bastion host running Amazon Linux 2023 inside the perimeter. Verification was successfully completed via native PowerShell SSH sessions using locked-down `.pem` file permissions via Windows Access Control Lists (`icacls.exe`). Diagnostic verification commands—including `ping` and `traceroute google.com` executed directly from the cloud instance shell—confirmed 0% packet loss and clean ICMP edge transit, validating the underlying VPC route tables before sealing the layout permanently in the final declarative configuration.
+=======
+# Legacylens-automation-
+>>>>>>> 24cc4e45dfc395d16ca482a129e6fd0ff473c119
