@@ -160,3 +160,29 @@ resource "aws_db_subnet_group" "db_subnet_group" {
     Name = "Legacylens-DB-Subnet-Group"
   }
 }
+# 15. Create the Database Security Group with the required description
+resource "aws_security_group" "db_sg" {
+  name        = "Legacylens-DB-SG"
+  description = "Access rules for PostgreSQL database instances"
+  vpc_id      = aws_vpc.legacylens.id
+
+  ingress {
+    description = "Allow PostgreSQL port 5432 strictly from the Private App Subnet"
+    from_port   = 5432                 # <-- Corrected to PostgreSQL Port
+    to_port     = 5432                 # <-- Corrected to PostgreSQL Port
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.2.0/24"]       # Private App Subnet CIDR
+  }
+
+  egress {
+    description = "Allow all outbound traffic"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "Legacylens-DB-SG"
+  }
+}
