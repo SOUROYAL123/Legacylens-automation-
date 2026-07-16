@@ -111,3 +111,52 @@ resource "aws_instance" "bastion" {
     Name = "Legacylens-Bastion-Host"
   }
 }
+# 10. Allocate an Elastic IP for the NAT Gateway
+resource "aws_eip" "nat_eip" {
+  domain     = "vpc"
+  depends_on = [aws_internet_gateway.igw]
+
+  tags = {
+    Name = "Legacylens-NAT-EIP"
+  }
+}
+
+# 11. Deploy the NAT Gateway into the Public Subnet
+resource "aws_nat_gateway" "nat_gw" {
+  allocation_id = aws_eip.nat_eip.id
+  subnet_id     = aws_subnet.public_subnet.id
+
+  tags = {
+    Name = "Legacylens-NAT-GW"
+  }
+}
+
+# 12. Create a Dedicated Route Table for Private Subnets
+resource "aws_route_table" "private_rt" {
+  vpc_id = aws_vpc.legacylens.id
+
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.nat_gw.id
+  }
+
+  tags = {
+    Name = "Legacylens-Private-RT"
+  }
+}
+
+# 13. Associate Private App Subnet to the NAT Route Table
+resource "aws_route_table_association" "private_app_assoc" {
+  subnet_id      = aws_subnet.private_app_subnet.id
+  route_table_id = aws_route_table.private_rt.id
+}
+
+# 14. Create a Database Subnet Group for Multi-AZ deployments
+resource "aws_db_subnet_group" "db_subnet_group" {
+  name       = "legacylens-db-subnet-group"
+  subnet_ids = [aws_subnet.private_app_subnet.id, aws_subnet.private_db_subnet.id]
+
+  tags = {
+    Name = "Legacylens-DB-Subnet-Group"
+  }
+}
