@@ -44,10 +44,12 @@ resource "aws_route_table" "public_rt" {
 }
 
 # 5. Associate the Public Route Table with the Public Subnet
-resource "aws_route_table_association" "public_assoc" {
-  subnet_id      = aws_subnet.public_subnet.id
-  route_table_id = aws_route_table.public_rt.id
-}
+# resource "aws_route_table_association" "public_assoc" {
+#   subnet_id      = aws_subnet.public_subnet.id
+#   route_table_id = aws_route_table.public_rt.id
+# }
+
+
 # 6. Create Private App Subnet
 resource "aws_subnet" "private_app_subnet" {
   vpc_id            = aws_vpc.legacylens.id
