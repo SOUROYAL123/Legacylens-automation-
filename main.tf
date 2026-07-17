@@ -2,6 +2,7 @@ provider "aws" {
   region = "ap-south-1" # Mumbai region
 }
 
+# 1. Core Virtual Private Cloud Perimeter
 resource "aws_vpc" "legacylens" {
   cidr_block           = "10.0.0.0/16"
   enable_dns_hostnames = true
@@ -11,6 +12,7 @@ resource "aws_vpc" "legacylens" {
   }
 }
 
+# 2. Public Facing Lobby Subnet
 resource "aws_subnet" "public_subnet" {
   vpc_id                  = aws_vpc.legacylens.id
   cidr_block              = "10.0.1.0/24"
@@ -21,7 +23,7 @@ resource "aws_subnet" "public_subnet" {
   }
 }
 
-# 3. Create the Internet Gateway
+# 3. Inbound/Outbound Public Highway Gateway
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.legacylens.id
 
@@ -30,7 +32,7 @@ resource "aws_internet_gateway" "igw" {
   }
 }
 
-# 4. Update the VPC's Default/Main Route Table to act as the Public Highway
+# 4. Main Route Table Configuration (Public Network Rules)
 resource "aws_default_route_table" "public_rt" {
   default_route_table_id = aws_vpc.legacylens.default_route_table_id
 
@@ -44,13 +46,7 @@ resource "aws_default_route_table" "public_rt" {
   }
 }
 
-# 5. Associate the Public Route Table with the Public Subnet (Safely Bypassed)
-# resource "aws_route_table_association" "public_assoc" {
-#   subnet_id      = aws_subnet.public_subnet.id
-#   route_table_id = aws_route_table.public_rt.id
-# }
-
-# 6. Create Private App Subnet (Lab Standard Naming)
+# 5. Isolated Application Core Subnet
 resource "aws_subnet" "private_app" {
   vpc_id            = aws_vpc.legacylens.id
   cidr_block        = "10.0.2.0/24"
@@ -61,7 +57,7 @@ resource "aws_subnet" "private_app" {
   }
 }
 
-# 7. Create Private DB Subnet
+# 6. Isolated Database Subnet
 resource "aws_subnet" "private_db_subnet" {
   vpc_id            = aws_vpc.legacylens.id
   cidr_block        = "10.0.3.0/24"
@@ -72,7 +68,7 @@ resource "aws_subnet" "private_db_subnet" {
   }
 }
 
-# 8. Create Security Group for Bastion Host
+# 7. Security Firewall for the Public Guard (Bastion Host)
 resource "aws_security_group" "bastion_sg" {
   name        = "bastion-sg"
   description = "Allow SSH access to Bastion host"
@@ -98,7 +94,7 @@ resource "aws_security_group" "bastion_sg" {
   }
 }
 
-# 9. Spin up the free-tier EC2 Bastion Host (Ubuntu 24.04 Blueprint)
+# 8. Hardened EC2 Bastion Host Instance
 resource "aws_instance" "bastion" {
   ami                    = "ami-0522ab6e1ddcc7055" 
   instance_type          = "t3.micro"
@@ -111,7 +107,7 @@ resource "aws_instance" "bastion" {
   }
 }
 
-# 10. Allocate an Elastic IP for the NAT Gateway
+# 9. Static Public IP Assignment for NAT Routing
 resource "aws_eip" "nat_eip" {
   domain     = "vpc"
   depends_on = [aws_internet_gateway.igw]
@@ -121,7 +117,7 @@ resource "aws_eip" "nat_eip" {
   }
 }
 
-# 11. Deploy the NAT Gateway into the Public Subnet
+# 10. Unidirectional NAT Gateway Egress Engine (Placed in Public Subnet)
 resource "aws_nat_gateway" "nat_gw" {
   allocation_id = aws_eip.nat_eip.id
   subnet_id     = aws_subnet.public_subnet.id
@@ -131,7 +127,7 @@ resource "aws_nat_gateway" "nat_gw" {
   }
 }
 
-# 12. Create a Dedicated Route Table for Private Subnets (Lab Standard Naming)
+# 11. Custom Dedicated Route Table for Isolated Subnets
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.legacylens.id
 
@@ -145,13 +141,13 @@ resource "aws_route_table" "private" {
   }
 }
 
-# 13. Associate Private App Subnet to the Private Route Table
+# 12. Associate Application Subnet to Private Routing Layer
 resource "aws_route_table_association" "private_app_assoc" {
   subnet_id      = aws_subnet.private_app.id
   route_table_id = aws_route_table.private.id
 }
 
-# 14. Create a Database Subnet Group for Multi-AZ deployments
+# 13. Managed Multi-AZ Database Group Mapping
 resource "aws_db_subnet_group" "db_subnet_group" {
   name       = "legacylens-db-subnet-group"
   subnet_ids = [aws_subnet.private_app.id, aws_subnet.private_db_subnet.id]
@@ -161,7 +157,7 @@ resource "aws_db_subnet_group" "db_subnet_group" {
   }
 }
 
-# 15. Create the Database Security Group
+# 14. Microsegmentation Firewall for Database Data Vault
 resource "aws_security_group" "db_sg" {
   name        = "Legacylens-DB-SG"
   description = "Access rules for PostgreSQL database instances"
@@ -190,9 +186,7 @@ resource "aws_security_group" "db_sg" {
 
 # ====================================================================
 # 🛠️ STATE REFACTORING MIGRATION BLOCKS
-# Prevents destruction by safely renaming tracked objects in state file
 # ====================================================================
-
 moved {
   from = aws_subnet.private_app_subnet
   to   = aws_subnet.private_app
@@ -201,4 +195,16 @@ moved {
 moved {
   from = aws_route_table.private_rt
   to   = aws_route_table.private
+}
+# 16. Spin up the Private Application Server
+resource "aws_instance" "private_app_server" {
+  ami                    = "ami-0522ab6e1ddcc7055" # Ubuntu 24.04
+  instance_type          = "t3.micro"
+  subnet_id              = aws_subnet.private_app.id # Placed in the Private Room
+  vpc_security_group_ids = [aws_security_group.bastion_sg.id] # Shares SSH access rule
+  key_name               = "legacylens-key"
+
+  tags = {
+    Name = "Legacylens-Private-App-Server"
+  }
 }
