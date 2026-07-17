@@ -47,3 +47,20 @@ Running this on our active Ubuntu Bastion Host revealed the following structural
 ### Outbound Network Egress Validation
 
 Running `nslookup google.com` confirmed that our outbound pathing is fully active. The local instance successfully generated a UDP port 53 query, resolved it through the local `127.0.0.53` stub, routed out through the public subnet's default route entry, and mapped its return destination cleanly. This confirms that the VPC networking fabric is perfectly aligned.
+### Outbound Data Egress Lifecycle (The NAT Gateway Pipeline)
+
+To protect our internal computing tier while maintaining the ability to pull package updates and connect to external APIs, we engineered a unidirectional outbound traffic system. The diagram below illustrates how data safely exits our private network:
+
+```text
+                      [ Internet ]
+                           ^
+                           | (Outbound Response)
+                   [ Internet Gateway ]
+                           ^
+                           |
+            [ Public Subnet (10.0.1.0/24) ] 
+             👉 Hosts: [ NAT Gateway (with Elastic IP) ]
+                           ^
+                           | (Route: 0.0.0.0/0 -> NAT Gateway)
+          [ Private App Subnet (10.0.2.0/24) ]
+             👉 Hosts: [ Node.js App Server ]
