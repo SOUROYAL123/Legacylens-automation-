@@ -94,6 +94,34 @@ resource "aws_security_group" "bastion_sg" {
   }
 }
 
+# 7b. NEW: Dedicated Inner Firewall for the Vault (Private App Server)
+# This implements Security Group Nesting for the Chain of Trust
+resource "aws_security_group" "private_app_sg" {
+  name        = "private-app-sg"
+  description = "Access rules for the hidden application server tier"
+  vpc_id      = aws_vpc.legacylens.id
+
+  ingress {
+    description     = "Allow SSH strictly from instances wearing the Bastion SG badge"
+    from_port       = 22
+    to_port         = 22
+    protocol        = "tcp"
+    security_groups = [aws_security_group.bastion_sg.id] # Nesting the ID directly
+  }
+
+  egress {
+    description = "Allow all outbound traffic via NAT Gateway"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "Legacylens-Private-App-SG"
+  }
+}
+
 # 8. Hardened EC2 Bastion Host Instance
 resource "aws_instance" "bastion" {
   ami                    = "ami-0522ab6e1ddcc7055" 
@@ -184,6 +212,22 @@ resource "aws_security_group" "db_sg" {
   }
 }
 
+# 16. RESHUFFLED: Spin up the Private Application Server
+resource "aws_instance" "private_app_server" {
+  ami                    = "ami-0522ab6e1ddcc7055" 
+  instance_type          = "t3.micro"
+  subnet_id              = aws_subnet.private_app.id 
+  
+  # CRUCIAL FIX: Assigned to the strict nested security group instead of sharing bastion
+  vpc_security_group_ids = [aws_security_group.private_app_sg.id] 
+  
+  key_name               = "legacylens-key"
+
+  tags = {
+    Name = "Legacylens-Private-App-Server"
+  }
+}
+
 # ====================================================================
 # 🛠️ STATE REFACTORING MIGRATION BLOCKS
 # ====================================================================
@@ -195,16 +239,4 @@ moved {
 moved {
   from = aws_route_table.private_rt
   to   = aws_route_table.private
-}
-# 16. Spin up the Private Application Server
-resource "aws_instance" "private_app_server" {
-  ami                    = "ami-0522ab6e1ddcc7055" # Ubuntu 24.04
-  instance_type          = "t3.micro"
-  subnet_id              = aws_subnet.private_app.id # Placed in the Private Room
-  vpc_security_group_ids = [aws_security_group.bastion_sg.id] # Shares SSH access rule
-  key_name               = "legacylens-key"
-
-  tags = {
-    Name = "Legacylens-Private-App-Server"
-  }
 }
