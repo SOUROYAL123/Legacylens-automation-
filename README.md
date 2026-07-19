@@ -99,3 +99,16 @@ We verified this locked-door boundary by executing low-level kernel authenticati
 3. **Session Verification (`w`):** Live telemetry inside the vault verified the source profile:
    * The incoming connection source was explicitly flagged as originating strictly from the Bastion internal identity (`10.0.1.x`), proving our home IP signature was completely masked.
 4. **Authentication Audit Logs (`/var/log/auth.log`):** The internal Linux system logs cleanly tracked the secure public-key validation handshakes routed through the internal bridge.
+
+## Day 5: Production Managed Databases & Multi-AZ Network Group Isolation
+
+Today, I expanded the *Legacylens* infrastructure by provisioning a production-ready, fully isolated **AWS RDS PostgreSQL Engine** using declarative Terraform blocks. 
+
+### Core Parameter Breakdown & Operational Engineering Value:
+
+*   `allocated_storage = 20`: Allocates a 20 GB General Purpose SSD storage tier. This baseline configuration satisfies the AWS Free Tier limitations, ensuring zero deployment cost overhead during active sandbox R&D while providing ample baseline performance for application database testing.
+*   `engine = "postgres"` & `engine_version = "16.1"`: Installs a clean PostgreSQL 16.1 distribution, keeping the cloud data engine perfectly synchronized with the relational database requirements of the Legacylens backend bot ecosystem.
+*   `instance_class = "db.t4g.micro"`: Leverages an ARM-based AWS Graviton4-optimized micro-instance. This selection demonstrates advanced real-world cloud optimization—delivering superior price-to-performance scaling compared to older x86-based instances.
+*   `db_subnet_group_name`: **The primary isolation anchor.** By tying the instance explicitly to `aws_db_subnet_group.db_subnet_group.name`, the relational engine is strictly forbidden from spinning up public-facing interfaces. It restricts database deployment to the multi-AZ private subnets across `ap-south-1a` and `ap-south-1b`, completely isolating the data layer from public edge networks.
+*   `vpc_security_group_ids`: Enforces microsegmentation boundaries by wrapping the instance inside a dedicated database firewall. This layer rejects all network connection handshakes unless they originate strictly over TCP Port 5432 from the private application server's network profile.
+*   `skip_final_snapshot = true`: An intentional developer-velocity optimization. It bypasses the time-consuming 7–10 minute data-backup lifecycle during infrastructure teardowns, allowing me to iterate, destroy, and redeploy modified architecture states rapidly without stalling development pipelines.

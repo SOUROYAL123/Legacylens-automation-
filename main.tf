@@ -67,6 +67,16 @@ resource "aws_subnet" "private_db_subnet" {
     Name = "Legacylens-Private-DB-Subnet"
   }
 }
+# 6b. New Additional Isolated Database subnet for Multi-AZ High Avialability 
+resource "aws_subnet" "private_db_subnet_2"{
+  vpc_id              =aws_vpc.legacylens.id 
+  cidr_block          ="10.0.4.0/24"            # Curves out a fresh, unused network slot
+  availability_zone   ="ap-south-1a"          # Places it in the opposite zone of subnet 1
+
+  tags = {
+    Name = "Legacylens-Private-DB-Subnet2"
+  }
+}
 
 # 7. Security Firewall for the Public Guard (Bastion Host)
 resource "aws_security_group" "bastion_sg" {
@@ -178,7 +188,7 @@ resource "aws_route_table_association" "private_app_assoc" {
 # 13. Managed Multi-AZ Database Group Mapping
 resource "aws_db_subnet_group" "db_subnet_group" {
   name       = "legacylens-db-subnet-group"
-  subnet_ids = [aws_subnet.private_app.id, aws_subnet.private_db_subnet.id]
+  subnet_ids = [ aws_subnet.private_db_subnet.id, aws_subnet.private_db_subnet_2.id]
 
   tags = {
     Name = "Legacylens-DB-Subnet-Group"
@@ -211,6 +221,30 @@ resource "aws_security_group" "db_sg" {
     Name = "Legacylens-DB-SG"
   }
 }
+# 15. Production-Ready Managed Postgres Database Engine (High Avialability tier)
+resource "aws_db_instance" "postgres_db"{
+  
+   allocated_storage      = 20
+  max_allocated_storage  = 100                # Automatically scales storage up if data grows
+  engine                 = "postgres"
+  engine_version         = "16"             # Production-stable PostgreSQL engine version
+  instance_class         = "db.t4g.micro"     # Uses AWS Graviton high-efficiency compute cores
+  
+  db_name                = "legacylens_prod"  # The name of your backend bot database instance
+  username               = "db_admin_user"
+  password               = "LegacyLensSecure2026!" # In production, use a secret store variable
+
+  db_subnet_group_name   = aws_db_subnet_group.db_subnet_group.name
+  vpc_security_group_ids = [aws_security_group.db_sg.id]
+  
+  multi_az               = true               # TURNS ON MULTI-AZ SLOT REPLICATION (Creates the Standby Mirror)
+  skip_final_snapshot    = true               # Prevents hang delays when destroying testing labs
+  
+  tags = {
+    Name = "Legacylens-Production-Database"
+  }
+}    
+                    
 
 # 16. RESHUFFLED: Spin up the Private Application Server
 resource "aws_instance" "private_app_server" {
