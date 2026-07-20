@@ -112,3 +112,15 @@ Today, I expanded the *Legacylens* infrastructure by provisioning a production-r
 *   `db_subnet_group_name`: **The primary isolation anchor.** By tying the instance explicitly to `aws_db_subnet_group.db_subnet_group.name`, the relational engine is strictly forbidden from spinning up public-facing interfaces. It restricts database deployment to the multi-AZ private subnets across `ap-south-1a` and `ap-south-1b`, completely isolating the data layer from public edge networks.
 *   `vpc_security_group_ids`: Enforces microsegmentation boundaries by wrapping the instance inside a dedicated database firewall. This layer rejects all network connection handshakes unless they originate strictly over TCP Port 5432 from the private application server's network profile.
 *   `skip_final_snapshot = true`: An intentional developer-velocity optimization. It bypasses the time-consuming 7–10 minute data-backup lifecycle during infrastructure teardowns, allowing me to iterate, destroy, and redeploy modified architecture states rapidly without stalling development pipelines.
+
+## Day 6: Infrastructure Deployment & Secure Inside-VPC Database Handshake Verification
+
+### 🛠️ Tasks Executed
+1. **Live RDS Provisioning:** Executed `terraform apply` to deploy a managed Multi-AZ PostgreSQL 16 relational database tier (`db.t4g.micro`) across isolated subnets (`ap-south-1a` and `ap-south-1b`).
+2. **Jump Host Tunnel Routing:** Leveraged local SSH Jump tunneling via the public Bastion host gate (`35.154.59.9`) to securely bridge access into the private application instance environment (`10.0.2.128`).
+3. **Linux Node Patching & Tooling Deployment:** Updated the internal Linux package manager index and installed native database routing engine utilities:
+   ```bash
+   sudo apt-get update -y
+   sudo apt-get install postgresql-client -y
+
+   psql -h terraform-044b39d4f87acf5e351c17466b.cfew2m0cwv6o.ap-south-1.rds.amazonaws.com -U db_admin_user -d legacylens_prod
