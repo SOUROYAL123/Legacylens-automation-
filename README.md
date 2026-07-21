@@ -124,3 +124,17 @@ Today, I expanded the *Legacylens* infrastructure by provisioning a production-r
    sudo apt-get install postgresql-client -y
 
    psql -h terraform-044b39d4f87acf5e351c17466b.cfew2m0cwv6o.ap-south-1.rds.amazonaws.com -U db_admin_user -d legacylens_prod
+
+  
+  
+   ## Day 7: Programmatic Node.js Environment Isolation & Database Socket Verification
+
+### 🛠️ Tasks Executed
+1. **Runtime Provisioning via NVM:** Installed Node Version Manager (NVM) and provisioned Node.js `v22.23.1` (LTS) along with `npm` on the private application server node (`10.0.2.105`).
+2. **Project Workspace & Dependency Management:** Created `~/legacylens-core` workspace and installed `pg` (node-postgres) driver and `dotenv` for secret isolation.
+3. **Secrets Decoupling:** Configured `.env` file to hold database host endpoints, credentials, and parameters safely outside application code.
+4. **Programmatic Socket Handshake:** Authored `db-test.js` to execute an asynchronous pool connection to the RDS Multi-AZ PostgreSQL 16 cluster (`16.13 aarch64`), validating query execution (`SELECT NOW()`) over TLS.
+
+### 🔒 Security & Architectural Insights
+* **Zero Secrets in Version Control:** Decoupling sensitive parameters via `.env` prevents credential exposure in public/private Git repositories. At runtime, `dotenv` loads configuration directly into `process.env` in memory.
+* **Non-Blocking Asynchronous I/O & Connection Pooling:** The `pg` driver utilizes Node.js event loops to manage database sockets asynchronously without blocking concurrent HTTP application requests. Connection pooling reuses established TCP sockets, significantly reducing latency and overhead compared to creating fresh handshakes per query.
