@@ -1,0 +1,21 @@
+=========================================
+DAY 7 - LIVE INFRASTRUCTURE SCRATCHPAD
+=========================================
+
+1. Bastion Host Public IP:
+   3.110.226.243
+
+2. Private App Server IP:
+   10.0.2.105
+
+3. RDS Database Endpoint (Host):
+   terraform-2313bb67ad69e4a376bc279316.cfew2m0cwv6o.ap-south-1.rds.amazonaws.com
+
+4. RDS Database Credentials:
+   DB_PORT     = 5432
+   DB_NAME     = legacylens_prod
+   DB_USER     = db_admin_user
+   DB_PASSWORD = LegacyLensSecure2026!
+
+5. SSH Jump Command (PowerShell):
+   ssh -i "E:\ssh_keys\clean-key.pem" -J ubuntu@3.110.226.243 ubuntu@10.0.2.105

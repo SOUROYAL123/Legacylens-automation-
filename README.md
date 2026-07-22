@@ -138,3 +138,16 @@ Today, I expanded the *Legacylens* infrastructure by provisioning a production-r
 ### 🔒 Security & Architectural Insights
 * **Zero Secrets in Version Control:** Decoupling sensitive parameters via `.env` prevents credential exposure in public/private Git repositories. At runtime, `dotenv` loads configuration directly into `process.env` in memory.
 * **Non-Blocking Asynchronous I/O & Connection Pooling:** The `pg` driver utilizes Node.js event loops to manage database sockets asynchronously without blocking concurrent HTTP application requests. Connection pooling reuses established TCP sockets, significantly reducing latency and overhead compared to creating fresh handshakes per query.
+
+
+
+## Day 8: Multi-Tenant Schema Isolation & Dynamic Search Path Driver
+
+### 🛠️ Tasks Executed
+1. **Isolated Schema Creation:** Designed and executed `day8_multitenant.sql` to establish two logical schema boundaries (`tenant_alpha` and `tenant_beta`) inside a shared PostgreSQL RDS database.
+2. **Schema-Level Data Segregation:** Provisioned `assets` tables, primary keys, performance indices (`idx_alpha_asset_name`, `idx_beta_asset_name`), and seed records within each independent tenant namespace.
+3. **Dynamic Driver Implementation:** Authored `index.js` utilizing `pg.Pool` to execute session-level `SET search_path TO <tenant_schema>` statements before query execution.
+
+### 🔒 Architectural Insights
+* **Schema-Based Multi-Tenancy:** Using schema isolation balances resource usage and database cost while providing strict logical data boundaries between different tenants without requiring separate physical database instances.
+* **Dynamic Connection Context:** Setting `search_path` per connection checkout allows standard, uniform SQL queries (e.g., `SELECT * FROM assets`) to automatically target the correct tenant's data safely and efficiently.
