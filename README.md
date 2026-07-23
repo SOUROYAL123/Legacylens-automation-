@@ -151,3 +151,32 @@ Today, I expanded the *Legacylens* infrastructure by provisioning a production-r
 ### 🔒 Architectural Insights
 * **Schema-Based Multi-Tenancy:** Using schema isolation balances resource usage and database cost while providing strict logical data boundaries between different tenants without requiring separate physical database instances.
 * **Dynamic Connection Context:** Setting `search_path` per connection checkout allows standard, uniform SQL queries (e.g., `SELECT * FROM assets`) to automatically target the correct tenant's data safely and efficiently.
+
+# Day 9: Private Database Isolation & Multi-Tenant Schema Configuration
+
+## 🎯 Objective
+Secure the LegacyLens PostgreSQL database within a private AWS VPC subnet, establish zero-trust access using an EC2 Bastion host via AWS Systems Manager (SSM), and implement a multi-tenant database schema for client data isolation.
+
+## 🛠️ Tech Stack & AWS Services
+* **Compute:** AWS EC2 (Ubuntu Bastion Host), AWS Systems Manager (SSM)
+* **Database:** Amazon RDS (PostgreSQL 16)
+* **Networking:** Amazon VPC (Private Subnets), Security Groups
+* **Infrastructure as Code:** Terraform
+* **Tools:** `psql`, AWS CLI, Bash/PowerShell
+
+## 🏗️ Architecture & Security Highlights
+1. **Zero-Trust Access (No SSH):** Eliminated the need for public IP addresses or opening Port 22. All administrative database access is routed securely through an EC2 Bastion host using AWS SSM Session Manager.
+2. **Private Subnet Isolation:** Deployed the RDS instance strictly within private subnets. The database is completely invisible to the public internet.
+3. **Security Group Chaining:** Configured the database Security Group to drop all connections except explicitly whitelisted internal VPC traffic (port 5432).
+4. **Multi-Tenant Schema Design:** Engineered a highly scalable PostgreSQL architecture using isolated schemas (`tenant_alpha`, `tenant_beta`) and dynamic `search_path` routing to securely separate restaurant data within a single database instance.
+
+## 🧪 Troubleshooting & Debugging Realities
+During deployment, I successfully diagnosed and resolved several real-world infrastructure challenges:
+* **VPC Firewall Blockages:** Diagnosed a database connection timeout by identifying a missing inbound rule on the RDS Security Group. Successfully modified the SG to allow internal `10.0.0.0/16` traffic.
+* **Database Authentication:** Troubleshot and bypassed local tunnel authentication failures, switching to direct Bastion access to successfully authenticate the `db_admin_user`.
+* **Connection Monitoring:** Executed administrative SQL queries (`SELECT count(*) FROM pg_stat_activity;`) to monitor connection pool health and prevent exhaustion.
+
+## 💡 Key Takeaways for Cloud Architecture
+* **Stateful vs. Stateless:** Security Groups are stateful; allowing inbound port 5432 traffic automatically allows the outbound response, contrasting with stateless Network ACLs.
+* **NAT Gateways:** Vital for allowing private subnets to pull required OS updates without exposing the instances to inbound internet traffic.
+* **Logical Data Separation:** Utilizing PostgreSQL schemas for multi-tenancy provides a secure, cost-effective alternative to spinning up separate database instances for every client.

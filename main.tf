@@ -32,7 +32,7 @@ resource "aws_internet_gateway" "igw" {
   }
 }
 
-# 4. Main Route Table Configuration (Public Network Rules)
+# 4. Main Route Table Configuration (Public Network Rules -> IGW)
 resource "aws_default_route_table" "public_rt" {
   default_route_table_id = aws_vpc.legacylens.default_route_table_id
 
@@ -57,7 +57,7 @@ resource "aws_subnet" "private_app" {
   }
 }
 
-# 6. Isolated Database Subnet
+# 6. Isolated Database Subnet 1
 resource "aws_subnet" "private_db_subnet" {
   vpc_id            = aws_vpc.legacylens.id
   cidr_block        = "10.0.3.0/24"
@@ -67,18 +67,19 @@ resource "aws_subnet" "private_db_subnet" {
     Name = "Legacylens-Private-DB-Subnet"
   }
 }
-# 6b. New Additional Isolated Database subnet for Multi-AZ High Avialability 
-resource "aws_subnet" "private_db_subnet_2"{
-  vpc_id              =aws_vpc.legacylens.id 
-  cidr_block          ="10.0.4.0/24"            # Curves out a fresh, unused network slot
-  availability_zone   ="ap-south-1a"          # Places it in the opposite zone of subnet 1
+
+# 6b. Additional Isolated Database Subnet 2 for Multi-AZ High Availability
+resource "aws_subnet" "private_db_subnet_2" {
+  vpc_id            = aws_vpc.legacylens.id
+  cidr_block        = "10.0.4.0/24"
+  availability_zone = "ap-south-1a"
 
   tags = {
     Name = "Legacylens-Private-DB-Subnet2"
   }
 }
 
-# 7. Security Firewall for the Public Guard (Bastion Host)
+# 7. Security Firewall for Public Guard (Bastion Host)
 resource "aws_security_group" "bastion_sg" {
   name        = "bastion-sg"
   description = "Allow SSH access to Bastion host"
@@ -89,7 +90,7 @@ resource "aws_security_group" "bastion_sg" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] 
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   egress {
@@ -104,19 +105,18 @@ resource "aws_security_group" "bastion_sg" {
   }
 }
 
-# 7b. NEW: Dedicated Inner Firewall for the Vault (Private App Server)
-# This implements Security Group Nesting for the Chain of Trust
+# 7b. Inner Firewall for Private App Server (Security Group Nesting)
 resource "aws_security_group" "private_app_sg" {
   name        = "private-app-sg"
-  description = "Access rules for the hidden application server tier"
+  description = "Access rules for hidden application server tier"
   vpc_id      = aws_vpc.legacylens.id
 
   ingress {
-    description     = "Allow SSH strictly from instances wearing the Bastion SG badge"
+    description     = "Allow SSH strictly from instances wearing Bastion SG badge"
     from_port       = 22
     to_port         = 22
     protocol        = "tcp"
-    security_groups = [aws_security_group.bastion_sg.id] # Nesting the ID directly
+    security_groups = [aws_security_group.bastion_sg.id]
   }
 
   egress {
@@ -132,13 +132,16 @@ resource "aws_security_group" "private_app_sg" {
   }
 }
 
-# 8. Hardened EC2 Bastion Host Instance
+# 8. Hardened EC2 Bastion Host Instance (With SSM Profile Attached)
 resource "aws_instance" "bastion" {
-  ami                    = "ami-0522ab6e1ddcc7055" 
+  ami                    = "ami-0522ab6e1ddcc7055"
   instance_type          = "t3.micro"
   subnet_id              = aws_subnet.public_subnet.id
   vpc_security_group_ids = [aws_security_group.bastion_sg.id]
   key_name               = "legacylens-key"
+
+  # Attaches the SSM IAM Instance Profile so the instance connects to SSM
+  iam_instance_profile = aws_iam_instance_profile.ssm_profile.name
 
   tags = {
     Name = "Legacylens-Bastion-Host"
@@ -155,7 +158,7 @@ resource "aws_eip" "nat_eip" {
   }
 }
 
-# 10. Unidirectional NAT Gateway Egress Engine (Placed in Public Subnet)
+# 10. Unidirectional NAT Gateway (Placed in Public Subnet)
 resource "aws_nat_gateway" "nat_gw" {
   allocation_id = aws_eip.nat_eip.id
   subnet_id     = aws_subnet.public_subnet.id
@@ -165,7 +168,7 @@ resource "aws_nat_gateway" "nat_gw" {
   }
 }
 
-# 11. Custom Dedicated Route Table for Isolated Subnets
+# 11. Custom Dedicated Route Table for Private Subnets (Routes -> NAT Gateway)
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.legacylens.id
 
@@ -188,25 +191,25 @@ resource "aws_route_table_association" "private_app_assoc" {
 # 13. Managed Multi-AZ Database Group Mapping
 resource "aws_db_subnet_group" "db_subnet_group" {
   name       = "legacylens-db-subnet-group"
-  subnet_ids = [ aws_subnet.private_db_subnet.id, aws_subnet.private_db_subnet_2.id]
+  subnet_ids = [aws_subnet.private_db_subnet.id, aws_subnet.private_db_subnet_2.id]
 
   tags = {
     Name = "Legacylens-DB-Subnet-Group"
   }
 }
 
-# 14. Microsegmentation Firewall for Database Data Vault
+# 14. Task 1 Compliance: Database Security Group (Least Privilege Referencing)
 resource "aws_security_group" "db_sg" {
   name        = "Legacylens-DB-SG"
   description = "Access rules for PostgreSQL database instances"
   vpc_id      = aws_vpc.legacylens.id
 
   ingress {
-    description = "Allow PostgreSQL port 5432 strictly from the Private App Subnet"
-    from_port   = 5432                 
-    to_port     = 5432                 
-    protocol    = "tcp"
-    cidr_blocks = ["10.0.2.0/24"]       
+    description     = "Allow PostgreSQL port 5432 strictly from Private App SG badge"
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = "tcp"
+    security_groups = [aws_security_group.private_app_sg.id] # 👈 Least Privilege SG Chaining
   }
 
   egress {
@@ -221,45 +224,68 @@ resource "aws_security_group" "db_sg" {
     Name = "Legacylens-DB-SG"
   }
 }
-# 15. Production-Ready Managed Postgres Database Engine (High Avialability tier)
-resource "aws_db_instance" "postgres_db"{
-  
-   allocated_storage      = 20
-  max_allocated_storage  = 100                # Automatically scales storage up if data grows
-  engine                 = "postgres"
-  engine_version         = "16"             # Production-stable PostgreSQL engine version
-  instance_class         = "db.t4g.micro"     # Uses AWS Graviton high-efficiency compute cores
-  
-  db_name                = "legacylens_prod"  # The name of your backend bot database instance
-  username               = "db_admin_user"
-  password               = "LegacyLensSecure2026!" # In production, use a secret store variable
 
+# 15. Production-Ready Managed Postgres Database Engine (Multi-AZ)
+resource "aws_db_instance" "postgres_db" {
+  allocated_storage      = 20
+  max_allocated_storage  = 100
+  engine                 = "postgres"
+  engine_version         = "16"
+  instance_class         = "db.t4g.micro"
+  db_name                = "legacylens_prod"
+  username               = "db_admin_user"
+  password               = "LegacyLensSecure2026!"
   db_subnet_group_name   = aws_db_subnet_group.db_subnet_group.name
   vpc_security_group_ids = [aws_security_group.db_sg.id]
-  
-  multi_az               = true               # TURNS ON MULTI-AZ SLOT REPLICATION (Creates the Standby Mirror)
-  skip_final_snapshot    = true               # Prevents hang delays when destroying testing labs
-  
+  multi_az               = true
+  skip_final_snapshot    = true
+
   tags = {
     Name = "Legacylens-Production-Database"
   }
-}    
-                    
+}
 
-# 16. RESHUFFLED: Spin up the Private Application Server
+# 16. Private Application Server
 resource "aws_instance" "private_app_server" {
-  ami                    = "ami-0522ab6e1ddcc7055" 
+  ami                    = "ami-0522ab6e1ddcc7055"
   instance_type          = "t3.micro"
-  subnet_id              = aws_subnet.private_app.id 
-  
-  # CRUCIAL FIX: Assigned to the strict nested security group instead of sharing bastion
-  vpc_security_group_ids = [aws_security_group.private_app_sg.id] 
-  
+  subnet_id              = aws_subnet.private_app.id
+  vpc_security_group_ids = [aws_security_group.private_app_sg.id]
   key_name               = "legacylens-key"
 
   tags = {
     Name = "Legacylens-Private-App-Server"
   }
+}
+
+# 17. IAM Role for Systems Manager (SSM)
+resource "aws_iam_role" "ssm_role" {
+  name = "Legacylens-SSM-Role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+# 18. Attach the AmazonSSMManagedInstanceCore Policy to the Role
+resource "aws_iam_role_policy_attachment" "ssm_policy_attach" {
+  role       = aws_iam_role.ssm_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+# 19. Create an Instance Profile to pass the IAM Role to the Bastion Instance
+resource "aws_iam_instance_profile" "ssm_profile" {
+  name = "Legacylens-SSM-Profile"
+  role = aws_iam_role.ssm_role.name
 }
 
 # ====================================================================
