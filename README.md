@@ -180,3 +180,34 @@ During deployment, I successfully diagnosed and resolved several real-world infr
 * **Stateful vs. Stateless:** Security Groups are stateful; allowing inbound port 5432 traffic automatically allows the outbound response, contrasting with stateless Network ACLs.
 * **NAT Gateways:** Vital for allowing private subnets to pull required OS updates without exposing the instances to inbound internet traffic.
 * **Logical Data Separation:** Utilizing PostgreSQL schemas for multi-tenancy provides a secure, cost-effective alternative to spinning up separate database instances for every client.
+
+
+# Day 10: Linux Network Diagnostics & Automated Database Migrations
+
+## 🎯 Objective
+Perform internal VPC network diagnostics using native Linux tools and deploy an idempotent, multi-tenant database migration script to an AWS RDS PostgreSQL instance via an EC2 Bastion host.
+
+## 🛠️ Tech Stack & Tools
+* **Compute / OS:** AWS EC2, Ubuntu Linux
+* **Database:** PostgreSQL 16 (Amazon RDS)
+* **Networking:** `ss`, `iproute2`, Netcat (`nc`)
+* **Version Control:** Git, GitHub
+* **Scripting:** SQL, Bash
+
+## 🏗️ Technical Execution
+
+### 1. Advanced Linux Network Auditing
+Instead of relying on GUI tools or AWS console dashboards, I utilized native Linux networking commands from inside the Bastion host to audit the environment:
+* **`ss -tulpn`**: Inspected all listening TCP/UDP ports. Verified that SSH and SSM agents were running, while ensuring no rogue database services were running locally.
+* **`ip route show`**: Traced the internal IP routing table to confirm traffic was properly routing through the VPC's implicit router (`10.0.1.1`).
+* **`nc -zv 127.0.0.1 5432`**: Performed a raw TCP handshake test on the local loopback address. The `Connection refused` response validated the decoupled architecture: the database is strictly isolated on its own RDS instance.
+
+### 2. Idempotent Multi-Tenant Migrations
+Transitioned from manual SQL queries to an automated, production-ready migration script (`day10_schema_migration.sql`):
+* **Transactional Safety:** Wrapped the execution in a `BEGIN;` and `COMMIT;` block to ensure the database would not be left in a corrupted state if the script failed halfway through.
+* **Idempotency:** Utilized `IF NOT EXISTS` clauses for schema and table creation. This ensures the script can be run multiple times (e.g., via a CI/CD pipeline) without throwing duplication errors or overwriting existing client data.
+* **Data Isolation:** Enforced strict logical separation between `tenant_alpha` and `tenant_beta` within a shared RDS instance, preparing the architecture for a scalable, multi-tenant application.
+
+## 💡 Cloud Architecture Takeaways
+* **Infrastructure as Code (IaC) Principles in SQL:** Writing database migrations must follow the same idempotent principles as Terraform—describing the *desired state* rather than just a series of blind commands.
+* **Decoupled Architecture:** Proving a port is *closed* on a Bastion server is just as important as proving it is *open* on the target database server.
