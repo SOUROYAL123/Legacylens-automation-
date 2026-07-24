@@ -1,5 +1,12 @@
+# Node.js
+node_modules/
+.env
+.env.txt
+
+# Terraform
 .terraform/
 *.tfstate
 *.tfstate.backup
-.env
-terraform.tfvars
+
+# Windows OS Files
+Thumbs.db
